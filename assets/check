@@ -18,6 +18,8 @@ cat > $payload <&0
 load_pubkey $payload
 
 uri=$(jq -r '.source.uri // ""' < $payload)
+branch_regexp=$(jq -r '.source.branch_regexp // ".*"' < $payload)
+max_branches=$(jq -r '.source.max_branches // "20"' < $payload)
 previous_branches_json=$(jq -r '.version.branches // ""' < $payload)
 
 destination=$TMPDIR/git-resource-repo-cache
@@ -28,25 +30,44 @@ else
   local_uri=false
 fi
 
-if [ -d $destination ]; then
-  cd $destination
-  git fetch
-  git reset --hard FETCH_HEAD
+if $local_uri ; then
+  # must omit --depth flag test suite otherwise local clone fails with RC=1
+  depthflag=''
 else
-  if $local_uri ; then
-    # must omit --depth flag test suite otherwise local clone fails with RC=1
-    git clone $uri $destination
-  else
-    # pass depth flag in actual use to avoid performance hit of cloning entire repo depth
-    git clone --depth 1 $uri $destination
-  fi
-  cd $destination
+  # pass depth flag in actual use to avoid performance hit of cloning entire repo depth
+  depthflag='--depth 1'
 fi
 
-current_branches_list=$(git show-ref | grep 'refs/remotes/origin' | grep -v 'HEAD' | cut -d ' ' -f 2 | cut -d '/' -f 4)
+
+if [ ! -d $destination ]; then
+  # if doesn't exist, i.e. is cached, clone it (default branch is fine, we
+  # just need to fetch and list all the remote branches)...
+  git clone $depthflag $uri $destination
+fi
+
+cd $destination
+
+# fetch all remote branches
+git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
+
+current_branches_list=$(
+  git show-ref |
+  grep 'refs/remotes/origin' |
+  grep -v 'HEAD' |
+  cut -d ' ' -f 2 |
+  cut -d '/' -f 4 |
+  grep -e "$branch_regexp"
+)
+
+current_branches_count=$(echo $current_branches_list | wc -w)
+if [ $current_branches_count -gt $max_branches ]; then
+  echo "$current_branches_count branches found, but 'max_branches' was $max_branches. " \
+    "Increase 'max_branches', or provide a more specific regular expression in 'branch_regexp'."
+  exit 99
+fi
+
 current_branches_json=$(echo $current_branches_list | jq -R '. | split(" ")')
 latest_version=$(jq -n "[{
-  uri: $(echo $uri | jq -R .),
   branches: $current_branches_json
 }]")
 

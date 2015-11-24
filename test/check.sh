@@ -7,18 +7,32 @@ source $(dirname $0)/helpers.sh
 it_can_list_branches_on_first_check() {
   local repo=$(init_repo)
 
-  check_uri_first_time $repo | jq -e ". == [{uri: $(echo $repo | jq -R .)
-    , \"branches\": [\"bogus\",\"master\"]}]
-  "
+  check_uri_first_time $repo | jq -e ". == [{\"branches\": [\"bogus\",\"master\"]}]"
+}
+
+it_can_filter_based_on_branch_regexp() {
+  local repo=$(init_repo)
+  make_commit_to_branch $repo 'feature-1'
+
+  check_uri_with_branch_regexp $repo | jq -e ". == [{\"branches\": [\"feature-1\"]}]"
+}
+
+it_raises_error_if_more_than_max_branches() {
+  local repo=$(init_repo)
+
+max_branches_rc=1
+$(check_uri_with_max_branches $repo) || max_branches_rc=$?
+  if [ $max_branches_rc -ne 99 ]; then
+    echo 'expected to exit with error code 99!'
+    exit 1
+  fi
 }
 
 it_returns_a_new_version_if_a_new_branch_was_added() {
   local repo=$(init_repo)
   make_commit_to_branch $repo 'feature-1'
 
-  check_uri $repo | jq -e ". == [{uri: $(echo $repo | jq -R .)
-    , \"branches\": [\"bogus\",\"feature-1\",\"master\"]}]
-  "
+  check_uri $repo | jq -e ". == [{\"branches\": [\"bogus\",\"feature-1\",\"master\"]}]"
 }
 
 it_returns_a_new_version_if_an_existing_branch_was_deleted() {
@@ -26,9 +40,7 @@ it_returns_a_new_version_if_an_existing_branch_was_deleted() {
   cd $repo
   git branch -D 'bogus'
 
-  check_uri $repo | jq -e ". == [{uri: $(echo $repo | jq -R .)
-    , \"branches\": [\"master\"]}]
-  "
+  check_uri $repo | jq -e ". == [{\"branches\": [\"master\"]}]"
 }
 
 it_does_not_return_a_new_version_if_no_new_or_deleted_branches() {
@@ -78,12 +90,12 @@ it_can_check_when_not_ff() {
   # setup tracking for my branch
   git branch -u origin/master HEAD
 
-  check_uri $repo | jq -e ". == [{uri: $(echo $repo | jq -R .)
-    , \"branches\": [\"bogus\",\"feature-1\",\"master\"]}]
-  "
+  check_uri $repo | jq -e ". == [{\"branches\": [\"bogus\",\"feature-1\",\"master\"]}]"
 }
 
 run it_can_list_branches_on_first_check
+run it_can_filter_based_on_branch_regexp
+run it_raises_error_if_more_than_max_branches
 run it_returns_a_new_version_if_a_new_branch_was_added
 run it_returns_a_new_version_if_an_existing_branch_was_deleted
 run it_does_not_return_a_new_version_if_no_new_or_deleted_branches

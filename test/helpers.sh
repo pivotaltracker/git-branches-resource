@@ -88,6 +88,26 @@ check_uri() {
   }" | ${resource_dir}/check | tee /dev/stderr
 }
 
+check_uri_with_branch_regexp() {
+  jq -n "{
+    source: {
+      uri: $(echo $1 | jq -R .),
+      branch_regexp: \"feature\"
+    },
+    version: {branches: [\"bogus\",\"master\"]}
+  }" | ${resource_dir}/check | tee /dev/stderr
+}
+
+check_uri_with_max_branches() {
+  jq -n "{
+    source: {
+      uri: $(echo $1 | jq -R .),
+      max_branches: 1
+    },
+    version: {branches: [\"bogus\",\"master\"]}
+  }" | ${resource_dir}/check | tee /dev/stderr
+}
+
 check_uri_first_time() {
   jq -n "{
     source: {
@@ -101,7 +121,6 @@ check_uri_first_time() {
 check_uri_with_key() {
   jq -n "{
     source: {
-      uri: $(echo $1 | jq -R .),
       private_key: $(cat $2 | jq -s -R .)
     }
   }" | ${resource_dir}/check | tee /dev/stderr
@@ -114,7 +133,6 @@ get_version() {
       uri: $(echo $1 | jq -R .)
     },
     version: {
-      uri: $(echo $1 | jq -R .),
       branches: [\"bogus\",\"master\"]
     }
   }" | ${resource_dir}/in "$2" | tee /dev/stderr

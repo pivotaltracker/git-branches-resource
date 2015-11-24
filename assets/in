@@ -22,12 +22,19 @@ payload=$(mktemp $TMPDIR/git-branches-resource-request.XXXXXX)
 
 cat > $payload <&0
 
+uri=$(jq -r '.source.uri // ""' < $payload)
 version=$(jq -r '.version // ""' < $payload)
+branches=$(jq -r '.version.branches // ""' < $payload)
 
 mkdir -p $destination
 
 cd $destination
 
-echo $version > version.json
+git_branches_json=$(jq -n "{
+  \"uri\": \"$uri\",
+  \"branches\": $branches
+}")
+
+echo $git_branches_json > git-branches.json
 
 echo $version >&3

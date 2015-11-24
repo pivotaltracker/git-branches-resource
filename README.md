@@ -18,6 +18,12 @@ and returns a list of all current branches whenever any are added or removed.
       -----END RSA PRIVATE KEY-----
     ```
 
+* `branch_regexp`: *Optional.*  A regular expression selecting the branches you wish to track.
+  By default, all branches (i.e. `.*`) are selected.
+
+* `max_branches`: *Optional, default is 20.*  The maximum number of branches to track.  If
+  more than this number are selected by `branch_regexp`, an error will be returned.
+
 ### Example
 
 Resource configuration for a private repo:
@@ -26,6 +32,8 @@ Resource configuration for a private repo:
 resources:
 - name: git-branches
   type: git-branches
+  branch_regexp: ".*" # This is the default
+  max_branches: 20 # This is the default
   source:
     uri: git@github.com:concourse/git-resource.git
     private_key: |
@@ -42,12 +50,13 @@ resources:
 
 The repository is cloned (or pulled if already present), if any branches
 were added or deleted, or if no version is given, a single version
-containing the repo uri and an array of all branches is returned.
+containing the repo uri and an array of all branches matching the
+`branch_regex`, up to `max_branches`, is returned.
 
 ### `in`: Clone the repository, at the given ref.
 
-Writes the version (containing uri and array of branches) to
-`version.json` in the destination directory.
+Writes the a hash containing the uri and the selected array of branches to
+`git-branches.json` in the destination directory.
 
 ### `out`: Push to a repository.
 
