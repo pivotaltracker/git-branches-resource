@@ -1,13 +1,11 @@
-# Git Resource
+# Git Branches Resource
 
-Tracks the commits in a [git](http://git-scm.com/) repository.
-
+Tracks when branches (refs) are added or removed from a [git](http://git-scm.com/) repository,
+and returns a list of all current branches whenever any are added or removed.
 
 ## Source Configuration
 
 * `uri`: *Required.* The location of the repository.
-
-* `branch`: *Required.* The branch to track.
 
 * `private_key`: *Optional.* Private key to use when pulling/pushing.
     Example:
@@ -20,23 +18,16 @@ Tracks the commits in a [git](http://git-scm.com/) repository.
       -----END RSA PRIVATE KEY-----
     ```
 
-* `paths`: *Optional.* If specified (as a list of glob patterns), only changes
-  to the specified files will yield new versions.
-
-* `ignore_paths`: *Optional.* The inverse of `paths`; changes to the specified
-  files are ignored.
-
 ### Example
 
 Resource configuration for a private repo:
 
 ``` yaml
 resources:
-- name: source-code
-  type: git
+- name: git-branches
+  type: git-branches
   source:
     uri: git@github.com:concourse/git-resource.git
-    branch: master
     private_key: |
       -----BEGIN RSA PRIVATE KEY-----
       MIIEowIBAAKCAQEAtCS10/f7W7lkQaSgD/mVeaSOvSF9ql4hf/zfMwfVGgHWjj+W
@@ -45,67 +36,19 @@ resources:
       -----END RSA PRIVATE KEY-----
 ```
 
-Fetching a repo with only 100 commits of history:
-
-``` yaml
-- get: source-code
-  params: {depth: 100}
-```
-
-Pushing local commits to the repo:
-
-``` yaml
-- get: some-other-repo
-- put: source-code
-  params: {repository: some-other-repo}
-```
-
-
 ## Behavior
 
-### `check`: Check for new commits.
+### `check`: Check for added or deleted branches since last run.
 
-The repository is cloned (or pulled if already present), and any commits
-made after the given version are returned. If no version is given, the ref
-for `HEAD` is returned.
-
-Any commits that contain the string `[ci skip]` will be ignored. This
-allows you to commit to your repository without triggering a new version.
+The repository is cloned (or pulled if already present), if any branches
+were added or deleted, or if no version is given, a single version
+containing the repo uri and an array of all branches is returned.
 
 ### `in`: Clone the repository, at the given ref.
 
-Clones the repository to the destination, and locks it down to a given ref.
-Returns the resulting ref as the version.
-
-Submodules are initialized and updated recursively.
-
-
-#### Parameters
-
-* `depth`: *Optional.* If a positive integer is given, *shallow* clone the
-  repository using the `--depth` option.
-
-* `submodules`: *Optional.* If `none`, submodules will not be
-  fetched. If specified as a list of paths, only the given paths will be
-  fetched. If not specified, or if `all` is explicitly specified, all
-  submodules are fetched.
-
+Writes the version (containing uri and array of branches) to
+`version.json` in the destination directory.
 
 ### `out`: Push to a repository.
 
-Push a repository to the source's URI and branch. All tags are also pushed
-to the source.
-
-#### Parameters
-
-* `repository`: *Required.* The path of the repository to push to the source.
-
-* `rebase`: *Optional.* If pushing fails with non-fast-forward, continuously
-  attempt rebasing and pushing.
-
-* `tag`: *Optional* If this is set then HEAD will be tagged. The value should be
-  a path to a file containing the name of the tag.
-
-* `tag_prefix`: *Optional.* If specified, the tag read from the file will be
-prepended with this string. This is useful for adding `v` in front of
-version numbers.
+Not implemented.

@@ -18,58 +18,16 @@ fi
 # for jq
 PATH=/usr/local/bin:$PATH
 
-payload=$(mktemp $TMPDIR/git-resource-request.XXXXXX)
+payload=$(mktemp $TMPDIR/git-branches-resource-request.XXXXXX)
 
 cat > $payload <&0
 
-load_pubkey $payload
+version=$(jq -r '.version // ""' < $payload)
 
-uri=$(jq -r '.source.uri // ""' < $payload)
-branch=$(jq -r '.source.branch // ""' < $payload)
-ref=$(jq -r '.version.ref // "HEAD"' < $payload)
-depth=$(jq -r '(.params.depth // 0)' < $payload)
-fetch=$(jq -r '(.params.fetch // [])[]' < $payload)
-submodules=$(jq -r '(.params.submodules // "all")' < $payload)
-
-if [ -z "$uri" ]; then
-  echo "invalid payload (missing uri):" >&2
-  cat $payload >&2
-  exit 1
-fi
-
-branchflag=""
-if [ -n "$branch" ]; then
-  branchflag="--branch $branch"
-fi
-
-depthflag=""
-if test "$depth" -gt 0 2> /dev/null; then
-  depthflag="--depth $depth"
-fi
-
-git clone --single-branch $depthflag $uri $branchflag $destination
+mkdir -p $destination
 
 cd $destination
 
-git checkout -q $ref
-git log -1 --oneline
-git clean --force --force -d
+echo $version > version.json
 
-if [ "$submodules" == "all" ]; then
-  git submodule update --init --recursive
-elif [ "$submodules" != "none" ]; then
-  submodules=$(echo $submodules | jq -r '(.[])')
-  for submodule in $submodules; do
-    git submodule update --init --recursive $submodule
-  done
-fi
-
-for branch in $fetch; do
-  git fetch origin $branch
-  git branch $branch FETCH_HEAD
-done
-
-jq -n "{
-  version: {ref: $(git rev-parse HEAD | jq -R .)},
-  metadata: $(git_metadata)
-}" >&3
+echo $version >&3

@@ -18,40 +18,44 @@ cat > $payload <&0
 load_pubkey $payload
 
 uri=$(jq -r '.source.uri // ""' < $payload)
-branch=$(jq -r '.source.branch // ""' < $payload)
-paths="$(jq -r '(.source.paths // ["."])[]' < $payload)" # those "'s are important
-ignore_paths="$(jq -r '":!" + (.source.ignore_paths // [])[]' < $payload)" # these ones too
-ref=$(jq -r '.version.ref // ""' < $payload)
+previous_branches_json=$(jq -r '.version.branches // ""' < $payload)
 
 destination=$TMPDIR/git-resource-repo-cache
+
+if echo $uri | grep -e '^/' ; then
+  local_uri=true
+else
+  local_uri=false
+fi
 
 if [ -d $destination ]; then
   cd $destination
   git fetch
   git reset --hard FETCH_HEAD
 else
-  branchflag=""
-  if [ -n "$branch" ]; then
-    branchflag="--branch $branch"
+  if $local_uri ; then
+    # must omit --depth flag test suite otherwise local clone fails with RC=1
+    git clone $uri $destination
+  else
+    # pass depth flag in actual use to avoid performance hit of cloning entire repo depth
+    git clone --depth 1 $uri $destination
   fi
-
-  git clone --single-branch $uri $branchflag $destination
   cd $destination
 fi
 
-if [ -n "$ref" ] && git cat-file -e "$ref"; then
-  log_range="--reverse ${ref}..HEAD"
+current_branches_list=$(git show-ref | grep 'refs/remotes/origin' | grep -v 'HEAD' | cut -d ' ' -f 2 | cut -d '/' -f 4)
+current_branches_json=$(echo $current_branches_list | jq -R '. | split(" ")')
+latest_version=$(jq -n "[{
+  uri: $(echo $uri | jq -R .),
+  branches: $current_branches_json
+}]")
+
+if [ "$previous_branches_json" == "$current_branches_json" ] ; then
+  version="[]"
+elif [ "$previous_branches_json" == '' ]; then
+  version=$latest_version
 else
-  log_range="-1"
+  version=$latest_version
 fi
 
-if [ $paths = '.' ] && [ -z $ignore_paths ]; then
-  paths_search=""
-else
-  paths_search="-- $paths $ignore_paths"
-fi
-
-
-{
-  git log --grep '\[ci skip\]' --invert-grep --format='%H' $log_range $paths_search
-} | jq -R '.' | jq -s "map({ref: .})" >&3
+echo $version >&3
