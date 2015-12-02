@@ -15,12 +15,16 @@ payload=$TMPDIR/git-resource-request
 
 cat > $payload <&0
 
+echo 'Running check script...'
+
 load_pubkey $payload
 
+echo 'Parsing payload...'
 uri=$(jq -r '.source.uri // ""' < $payload)
 branch_regexp=$(jq -r '.source.branch_regexp // ".*"' < $payload)
 max_branches=$(jq -r '.source.max_branches // "20"' < $payload)
 previous_branches_json=$(jq -r '.version.branches // ""' < $payload)
+previous_increment=$(jq -r '.version.increment // "0"' < $payload)
 
 destination=$TMPDIR/git-resource-repo-cache
 
@@ -40,6 +44,7 @@ fi
 
 
 if [ ! -d $destination ]; then
+  echo 'Cloning repo...'
   # if doesn't exist, i.e. is cached, clone it (default branch is fine, we
   # just need to fetch and list all the remote branches)...
   git clone $depthflag $uri $destination
@@ -47,9 +52,11 @@ fi
 
 cd $destination
 
+echo 'Fetching remote branches...'
 # fetch all remote branches
 git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
 
+echo 'Filtering branches...'
 current_branches_list=$(
   git show-ref |
   grep 'refs/remotes/origin' |
@@ -59,6 +66,7 @@ current_branches_list=$(
   grep -E "$branch_regexp"
 )
 
+echo 'Running check script...'
 current_branches_count=$(echo $current_branches_list | wc -w)
 if [ $current_branches_count -gt $max_branches ]; then
   echo "$current_branches_count branches found, but 'max_branches' was $max_branches. " \
@@ -66,17 +74,26 @@ if [ $current_branches_count -gt $max_branches ]; then
   exit 99
 fi
 
+echo 'Generating current branches json...'
 current_branches_json=$(echo $current_branches_list | jq -R '. | split(" ")')
+
+echo 'Generating latest version json...'
+increment="$(($previous_increment + 1))"
 latest_version=$(jq -n "[{
+  \"increment\": \"$increment\",
   branches: $current_branches_json
 }]")
 
 if [ "$previous_branches_json" == "$current_branches_json" ] ; then
+  echo 'Previous branches json is same as current branches json, returning empty (no) version...'
   version="[]"
 elif [ "$previous_branches_json" == '' ]; then
+  echo 'Previous branches json is empty, returning latest version as version...'
   version=$latest_version
 else
+  echo 'Previous branches json is different than current branches json, returning latest version...'
   version=$latest_version
 fi
 
+echo 'Finished check script...'
 echo $version >&3
