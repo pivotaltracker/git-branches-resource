@@ -24,7 +24,7 @@ previous_branches_json=$(jq -r '.version.branches // ""' < $payload)
 
 destination=$TMPDIR/git-resource-repo-cache
 
-if echo $uri | grep -e '^/' ; then
+if echo $uri | grep -E '^/' ; then
   local_uri=true
 else
   local_uri=false
@@ -56,7 +56,7 @@ current_branches_list=$(
   grep -v 'HEAD' |
   cut -d ' ' -f 2 |
   cut -d '/' -f 4 |
-  grep -e "$branch_regexp"
+  grep -E "$branch_regexp"
 )
 
 current_branches_count=$(echo $current_branches_list | wc -w)
