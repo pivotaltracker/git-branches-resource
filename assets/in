@@ -24,7 +24,8 @@ cat > $payload <&0
 
 uri=$(jq -r '.source.uri // ""' < $payload)
 version=$(jq -r '.version // ""' < $payload)
-branches=$(jq -r '.version.branches // ""' < $payload)
+branches_list=$(jq -r '.version.branches // ""' < $payload)
+branches=$(echo $branches_list | jq -R '. | split(" ")')
 
 mkdir -p $destination
 

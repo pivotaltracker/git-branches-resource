@@ -23,7 +23,7 @@ echo 'Parsing payload...'
 uri=$(jq -r '.source.uri // ""' < $payload)
 branch_regexp=$(jq -r '.source.branch_regexp // ".*"' < $payload)
 max_branches=$(jq -r '.source.max_branches // "20"' < $payload)
-previous_branches_json=$(jq -r '.version.branches // ""' < $payload)
+previous_branches_list=$(jq -r '.version.branches // ""' < $payload)
 previous_increment=$(jq -r '.version.increment // "0"' < $payload)
 
 destination=$TMPDIR/git-resource-repo-cache
@@ -63,7 +63,9 @@ current_branches_list=$(
   grep -v 'HEAD' |
   cut -d ' ' -f 2 |
   cut -d '/' -f 4 |
-  grep -E "$branch_regexp"
+  grep -E "$branch_regexp" |
+  tr '\n' ' ' |
+  sed 's/ $//'g
 )
 
 echo 'Running check script...'
@@ -74,20 +76,14 @@ if [ $current_branches_count -gt $max_branches ]; then
   exit 99
 fi
 
-echo 'Generating current branches json...'
-current_branches_json=$(echo $current_branches_list | jq -R '. | split(" ")')
-
 echo 'Generating latest version json...'
 increment="$(($previous_increment + 1))"
-latest_version=$(jq -n "[{
-  \"increment\": \"$increment\",
-  branches: $current_branches_json
-}]")
+latest_version=$(jq -c -n "[{\"increment\": \"$increment\",\"branches\": \"$current_branches_list\"}]")
 
-if [ "$previous_branches_json" == "$current_branches_json" ] ; then
+if [ "$previous_branches_list" == "$current_branches_list" ] ; then
   echo 'Previous branches json is same as current branches json, returning empty (no) version...'
   version="[]"
-elif [ "$previous_branches_json" == '' ]; then
+elif [ "$previous_branches_list" == '' ]; then
   echo 'Previous branches json is empty, returning latest version as version...'
   version=$latest_version
 else
