@@ -61,3 +61,12 @@ Writes the a hash containing the uri and the selected array of branches to
 ### `out`: Push to a repository.
 
 Not implemented.
+
+## Runnings tests locally
+
+* Symlink `assets` dir to `/opt/resource`,
+  e.g.: `sudo ln -s /path/to/git-branches-resource/assets /opt/resource`
+* Change ownership of dir to local user, e.g. `sudo chown myuser /opt/resource`  
+* `test/all.sh`
+* Manually comment/uncomment test invocations at bottom of individual test
+  files to run "focused" tests
