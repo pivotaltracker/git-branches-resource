@@ -1,34 +1,57 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
 source $(dirname $0)/helpers.sh
 
-it_can_check_from_head() {
+it_can_list_branches_on_first_check() {
   local repo=$(init_repo)
-  local ref=$(make_commit $repo)
 
-  check_uri $repo | jq -e "
-    . == [{ref: $(echo $ref | jq -R .)}]
-  "
+  check_uri_first_time $repo | jq -e ". == [{\"increment\": \"1\", \"branches\": \"bogus master\"}]"
 }
 
-it_can_check_from_head_only_fetching_single_branch() {
+it_can_filter_based_on_branch_regexp() {
   local repo=$(init_repo)
-  local ref=$(make_commit $repo)
+  make_commit_to_branch $repo 'feature-1'
 
-  local cachedir="$TMPDIR/git-resource-repo-cache"
+  check_uri_with_branch_regexp $repo | jq -e ". == [{\"increment\": \"2\", \"branches\": \"feature-1\"}]"
+}
 
-  check_uri $repo | jq -e "
-    . == [{ref: $(echo $ref | jq -R .)}]
-  "
+it_raises_error_if_more_than_max_branches() {
+  local repo=$(init_repo)
 
-  ! git -C $cachedir rev-parse origin/bogus
+max_branches_rc=1
+$(check_uri_with_max_branches $repo) || max_branches_rc=$?
+  if [ $max_branches_rc -ne 99 ]; then
+    echo 'expected to exit with error code 99!'
+    exit 1
+  fi
+}
+
+it_returns_a_new_version_if_a_new_branch_was_added() {
+  local repo=$(init_repo)
+  make_commit_to_branch $repo 'feature-1'
+
+  check_uri $repo | jq -e ". == [{\"increment\": \"2\", \"branches\": \"bogus feature-1 master\"}]"
+}
+
+it_returns_a_new_version_if_an_existing_branch_was_deleted() {
+  local repo=$(init_repo)
+  cd $repo
+  git branch -D 'bogus'
+
+  check_uri $repo | jq -e ". == [{\"increment\": \"2\", \"branches\": \"master\"}]"
+}
+
+it_does_not_return_a_new_version_if_no_new_or_deleted_branches() {
+  local repo=$(init_repo)
+
+  check_uri $repo | jq -e ". == []"
 }
 
 it_fails_if_key_has_password() {
   local repo=$(init_repo)
-  local ref=$(make_commit $repo)
+  make_commit $repo
 
   local key=$TMPDIR/key-with-passphrase
   ssh-keygen -f $key -N some-passphrase
@@ -42,140 +65,13 @@ it_fails_if_key_has_password() {
   grep "Private keys with passphrases are not supported." $failed_output
 }
 
-it_can_check_from_a_ref() {
-  local repo=$(init_repo)
-  local ref1=$(make_commit $repo)
-  local ref2=$(make_commit $repo)
-  local ref3=$(make_commit $repo)
-
-  check_uri_from $repo $ref1 | jq -e "
-    . == [
-      {ref: $(echo $ref2 | jq -R .)},
-      {ref: $(echo $ref3 | jq -R .)}
-    ]
-  "
-}
-
-it_can_check_from_a_bogus_sha() {
-  local repo=$(init_repo)
-  local ref1=$(make_commit $repo)
-  local ref2=$(make_commit $repo)
-
-  check_uri_from $repo "bogus-ref" | jq -e "
-    . == [{ref: $(echo $ref2 | jq -R .)}]
-  "
-}
-
-it_skips_ignored_paths() {
-  local repo=$(init_repo)
-  local ref1=$(make_commit_to_file $repo file-a)
-  local ref2=$(make_commit_to_file $repo file-b)
-  local ref3=$(make_commit_to_file $repo file-c)
-
-  check_uri_ignoring $repo "file-c" | jq -e "
-    . == [{ref: $(echo $ref2 | jq -R .)}]
-  "
-
-  check_uri_from_ignoring $repo $ref1 "file-c" | jq -e "
-    . == [{ref: $(echo $ref2 | jq -R .)}]
-  "
-
-  local ref4=$(make_commit_to_file $repo file-b)
-
-  check_uri_ignoring $repo "file-c" | jq -e "
-    . == [{ref: $(echo $ref4 | jq -R .)}]
-  "
-
-  check_uri_from_ignoring $repo $ref1 "file-c" | jq -e "
-    . == [
-      {ref: $(echo $ref2 | jq -R .)},
-      {ref: $(echo $ref4 | jq -R .)}
-    ]
-  "
-}
-
-it_checks_given_paths() {
-  local repo=$(init_repo)
-  local ref1=$(make_commit_to_file $repo file-a)
-  local ref2=$(make_commit_to_file $repo file-b)
-  local ref3=$(make_commit_to_file $repo file-c)
-
-  check_uri_paths $repo "file-c" | jq -e "
-    . == [{ref: $(echo $ref3 | jq -R .)}]
-  "
-
-  check_uri_from_paths $repo $ref1 "file-c" | jq -e "
-    . == [{ref: $(echo $ref3 | jq -R .)}]
-  "
-
-  local ref4=$(make_commit_to_file $repo file-b)
-
-  check_uri_paths $repo "file-c" | jq -e "
-    . == [{ref: $(echo $ref3 | jq -R .)}]
-  "
-
-  local ref5=$(make_commit_to_file $repo file-c)
-
-  check_uri_from_paths $repo $ref1 "file-c" | jq -e "
-    . == [
-      {ref: $(echo $ref3 | jq -R .)},
-      {ref: $(echo $ref5 | jq -R .)}
-    ]
-  "
-}
-
-it_checks_given_ignored_paths() {
-  local repo=$(init_repo)
-  local ref1=$(make_commit_to_file $repo file-a)
-  local ref2=$(make_commit_to_file $repo file-b)
-  local ref3=$(make_commit_to_file $repo some-file)
-
-  check_uri_paths_ignoring $repo 'file-*' 'file-b' | jq -e "
-    . == [{ref: $(echo $ref1 | jq -R .)}]
-  "
-
-  check_uri_from_paths_ignoring $repo $ref1 'file-*' 'file-b' | jq -e "
-    . == []
-  "
-
-  local ref4=$(make_commit_to_file $repo file-b)
-
-  check_uri_paths_ignoring $repo 'file-*' 'file-b' | jq -e "
-    . == [{ref: $(echo $ref1 | jq -R .)}]
-  "
-
-  local ref5=$(make_commit_to_file $repo file-a)
-
-  check_uri_paths_ignoring $repo 'file-*' 'file-b' | jq -e "
-    . == [{ref: $(echo $ref5 | jq -R .)}]
-  "
-
-  local ref6=$(make_commit_to_file $repo file-c)
-
-  local ref7=$(make_commit_to_file $repo some-file)
-
-  check_uri_from_paths_ignoring $repo $ref1 'file-*' 'file-b' | jq -e "
-    . == [
-      {ref: $(echo $ref5 | jq -R .)},
-      {ref: $(echo $ref6 | jq -R .)}
-    ]
-  "
-
-  check_uri_from_paths_ignoring $repo $ref1 'file-*' 'file-b' 'file-c' | jq -e "
-    . == [
-      {ref: $(echo $ref5 | jq -R .)}
-    ]
-  "
-}
-
 it_can_check_when_not_ff() {
   local repo=$(init_repo)
   local other_repo=$(init_repo)
 
-  local ref1=$(make_commit $repo)
-  local ref2=$(make_commit $repo)
+  make_commit_to_branch $repo 'feature-1'
 
-  local ref3=$(make_commit $other_repo)
+  make_commit $other_repo
 
   check_uri $other_repo
 
@@ -194,95 +90,14 @@ it_can_check_when_not_ff() {
   # setup tracking for my branch
   git branch -u origin/master HEAD
 
-  check_uri $other_repo | jq -e "
-    . == [{ref: $(echo $ref2 | jq -R .)}]
-  "
+  check_uri $repo | jq -e ". == [{\"increment\": \"2\", \"branches\": \"bogus feature-1 master\"}]"
 }
 
-it_skips_marked_commits() {
-  local repo=$(init_repo)
-  local ref1=$(make_commit $repo)
-  local ref2=$(make_commit_to_be_skipped $repo)
-  local ref3=$(make_commit $repo)
-
-  check_uri_from $repo $ref1 | jq -e "
-    . == [
-      {ref: $(echo $ref3 | jq -R .)}
-    ]
-  "
-}
-
-it_skips_marked_commits_with_no_version() {
-  local repo=$(init_repo)
-  local ref1=$(make_commit $repo)
-  local ref2=$(make_commit_to_be_skipped $repo)
-  local ref3=$(make_commit_to_be_skipped $repo)
-
-  check_uri $repo | jq -e "
-    . == [
-      {ref: $(echo $ref1 | jq -R .)}
-    ]
-  "
-}
-
-it_can_check_empty_commits() {
-  local repo=$(init_repo)
-  local ref1=$(make_commit $repo)
-  local ref2=$(make_empty_commit $repo)
-
-  check_uri_from $repo $ref1 | jq -e "
-    . == [
-      {ref: $(echo $ref2 | jq -R .)}
-    ]
-  "
-}
-
-it_can_check_from_head_with_empty_commits() {
-  local repo=$(init_repo)
-  local ref1=$(make_commit $repo)
-  local ref2=$(make_empty_commit $repo)
-
-  check_uri $repo | jq -e "
-    . == [{ref: $(echo $ref2 | jq -R .)}]
-  "
-}
-
-it_can_check_with_tag_filter() {
-  local repo=$(init_repo)
-  local ref1=$(make_commit $repo)
-  local ref2=$(make_annotated_tag $repo "1.0-staging" "a tag")
-  local ref3=$(make_commit $repo)
-  local ref4=$(make_annotated_tag $repo "1.0-production" "another tag")
-  local ref5=$(make_commit $repo)
-
-  check_uri_with_tag_filter $repo "*-staging" | jq -e "
-    . == [{ref: $(echo $ref2 | jq -R .)}]
-  "
-}
-
-it_can_check_and_set_git_config() {
-  local repo=$(init_repo)
-  local ref=$(make_commit $repo)
-
-  check_uri_with_config $repo | jq -e "
-    . == [{ref: $(echo $ref | jq -R .)}]
-  "
-  set -x
-  test "$(git config --global core.pager)" == 'true'
-  test "$(git config --global credential.helper)" == '!true long command with variables $@'
-}
-
-run it_can_check_from_head
-run it_can_check_from_a_ref
-run it_can_check_from_a_bogus_sha
-run it_skips_ignored_paths
-run it_checks_given_paths
-run it_checks_given_ignored_paths
-run it_can_check_when_not_ff
-run it_skips_marked_commits
-run it_skips_marked_commits_with_no_version
+run it_can_list_branches_on_first_check
+run it_can_filter_based_on_branch_regexp
+run it_raises_error_if_more_than_max_branches
+run it_returns_a_new_version_if_a_new_branch_was_added
+run it_returns_a_new_version_if_an_existing_branch_was_deleted
+run it_does_not_return_a_new_version_if_no_new_or_deleted_branches
 run it_fails_if_key_has_password
-run it_can_check_empty_commits
-run it_can_check_with_tag_filter
-run it_can_check_from_head_only_fetching_single_branch
-run it_can_check_and_set_git_config
+run it_can_check_when_not_ff
