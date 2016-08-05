@@ -62,7 +62,7 @@ current_branches_list=$(
   grep 'refs/remotes/origin' |
   grep -v 'HEAD' |
   cut -d ' ' -f 2 |
-  cut -d '/' -f 4 |
+  cut -d '/' -f 4- |
   grep -E "$branch_regexp" |
   tr '\n' ' ' |
   sed 's/ $//'g
