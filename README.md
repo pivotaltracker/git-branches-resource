@@ -3,6 +3,8 @@
 Tracks when branches (refs) are added or removed from a [git](http://git-scm.com/) repository,
 and returns a list of all current branches whenever any are added or removed.
 
+Used by [Concourse Branch Manager](https://github.com/pivotaltracker/concourse-branch-manager)
+
 ## Source Configuration
 
 * `uri`: *Required.* The location of the repository.
