@@ -72,3 +72,16 @@ Not implemented.
 * `test/all.sh`
 * Manually comment/uncomment test invocations at bottom of individual test
   files to run "focused" tests
+
+## Release Process Notes
+
+
+* Docker Repo Page: https://hub.docker.com/r/tracker/git-branches-resource/
+
+### Publishing
+
+* Make a git tag and push
+* Auth to docker: `docker login`
+* Make a docker tag (where "N" matches tag `0.N.0`: `docker tag tracker/git-branches-resource tracker/git-branches-resource:N`
+* Push to docker "N" tag: `docker push tracker/git-branches-resource:N`
+* Push to docker "latest" tag: `docker push tracker/git-branches-resource`
