@@ -1,3 +1,7 @@
+# UPDATE
+
+This tool and repo is no longer used nor maintained by pivotaltracker.  If anyone wishes to take over ownership and maintenance, please open an issue.
+
 # Git Branches Resource
 
 Tracks when branches (refs) are added or removed from a [git](http://git-scm.com/) repository,
